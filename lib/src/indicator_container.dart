@@ -2,8 +2,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:refresh/src/configuration.dart';
-import 'package:refresh/src/status.dart';
+import 'package:refresh_widget/src/configuration.dart';
+import 'package:refresh_widget/src/status.dart';
 
 enum RefreshIndicatorContainerMode { header, footer }
 

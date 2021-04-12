@@ -8,7 +8,7 @@ A Flutter Refresh Control.
 
 import 'package:flutter/material.dart';
 
-import 'package:refresh/refresh.dart';
+import 'package:refresh_widget/refresh_widget.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -59,4 +59,7 @@ class HomePageState extends State<HomePage> {
 }
 
 
+
 ```
+
+`RefreshScrollController` is required

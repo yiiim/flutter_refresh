@@ -1,8 +1,7 @@
-name: refresh
+name: refresh_widget
 description: A Flutter High Performance Refresh Control.
 version: 0.0.1
-author: ybz
-homepage:
+homepage: https://github.com/yiiim/flutter_refresh
 
 environment:
   sdk: ">=2.7.0 <3.0.0"

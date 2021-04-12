@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:refresh/src/indicator_container.dart';
+import 'package:refresh_widget/src/indicator_container.dart';
 
 import 'configuration.dart';
 import 'status.dart';

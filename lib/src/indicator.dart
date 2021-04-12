@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:refresh/src/configuration.dart';
-import 'package:refresh/src/status.dart';
+import 'package:refresh_widget/src/configuration.dart';
+import 'package:refresh_widget/src/status.dart';
 
 class BasisHeaderRefreshIndicator extends StatelessWidget {
   BasisHeaderRefreshIndicator({this.status, this.configuration, this.offest});
