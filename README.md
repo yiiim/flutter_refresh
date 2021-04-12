@@ -4,11 +4,59 @@ A Flutter Refresh Control.
 
 ## Getting Started
 
-This project is a starting point for a Dart
-[package](https://flutter.dev/developing-packages/),
-a library module containing code that can be shared easily across
-multiple Flutter or Dart projects.
+```dart
 
-For help getting started with Flutter, view our 
-[online documentation](https://flutter.dev/docs), which offers tutorials, 
-samples, guidance on mobile development, and a full API reference.
+import 'package:flutter/material.dart';
+
+import 'package:refresh/refresh.dart';
+
+class HomePage extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() => HomePageState();
+}
+
+class HomePageState extends State<HomePage> {
+  bool _footerNoMoreData = false;
+  int _itemCount = 10;
+  RefreshScrollController _refreshScrollController = RefreshScrollController();
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("Home")),
+      body: RefreshConfiguration(
+        headerSuccessDuration: Duration.zero,
+        child: RefreshWidget(
+          footerNoMoreData: _footerNoMoreData,
+          scrollController: _refreshScrollController,
+          onHeaderRefresh: () async {
+            await Future.delayed(Duration(seconds: 3));
+            setState(() {
+              _itemCount = 10;
+              _footerNoMoreData = false;
+            });
+            return true;
+          },
+          onFooterRefresh: () async {
+            await Future.delayed(Duration(seconds: 3));
+            setState(() {
+              _itemCount += 10;
+              if (_itemCount > 30) _footerNoMoreData = true;
+            });
+            return true;
+          },
+          child: ListView.builder(
+            controller: _refreshScrollController,
+            physics: AlwaysScrollableScrollPhysics(),
+            itemCount: _itemCount,
+            itemBuilder: (context, index) {
+              return ListTile(title: Text("$index"));
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+```
