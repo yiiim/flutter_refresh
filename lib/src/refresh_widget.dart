@@ -1,5 +1,8 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:refresh_widget/src/status.dart';
 import 'package:refresh_widget/src/indicator_container.dart';
 
 import 'configuration.dart';
@@ -7,7 +10,27 @@ import 'status.dart';
 import 'indicator.dart';
 
 class RefreshWidget extends StatefulWidget {
-  RefreshWidget({this.child, this.initialStartHeaderRefresh = false, this.scrollController, this.configuration, this.onHeaderRefresh, this.onFooterRefresh, this.footerNoMoreData, this.headerIndicatorBuilder, this.footerIndicatorBuilder});
+  RefreshWidget({
+    this.child,
+    this.headerExpand,
+    this.footerExpand,
+    this.initialStartHeaderRefresh = false,
+    this.scrollController,
+    this.configuration,
+    this.onHeaderRefresh,
+    this.onFooterRefresh,
+    this.footerNoMoreData = false,
+    this.headerIndicatorBuilder,
+    this.footerIndicatorBuilder,
+    this.headerOnTap,
+    this.footerOnTap,
+  });
+
+  /// header距离顶部距离
+  final double headerExpand;
+
+  /// footer距离顶部距离
+  final double footerExpand;
 
   /// 是否开启启动刷新
   final bool initialStartHeaderRefresh;
@@ -33,6 +56,12 @@ class RefreshWidget extends StatefulWidget {
   /// 是否无数据
   final bool footerNoMoreData;
 
+  ///header点击事件
+  final void Function(RefreshStatus) headerOnTap;
+
+  ///footer点击事件
+  final void Function(RefreshStatus) footerOnTap;
+
   final Widget child;
   @override
   State<StatefulWidget> createState() => RefreshWidgetState();
@@ -48,21 +77,11 @@ class RefreshWidgetState extends State<RefreshWidget> {
   Future _footerNoMoreDataWait;
   void _updateRefreshController() {
     assert(widget.scrollController != null);
-    if (_refreshScrollController != widget.scrollController) {
-      _refreshScrollController = widget.scrollController;
-      if (widget.onHeaderRefresh != null) {
-        _refreshScrollController.headerStatusValueNotifier = _headerStatusValueNotifier;
-        if (_refreshScrollController.hasClients) _refreshScrollController.position.headerStatusValueNotifier = _headerStatusValueNotifier;
-      }
-      if (widget.onFooterRefresh != null) {
-        _refreshScrollController.footerStatusValueNotifier = _footerStatusValueNotifier;
-        if (_refreshScrollController.hasClients) _refreshScrollController.position.footerStatusValueNotifier = _footerStatusValueNotifier;
-      }
-      _refreshScrollController.pixelsChangeNotifierModel = _pixelsChangeNotifierModel;
-      if (_refreshScrollController.hasClients) _refreshScrollController.position.pixelsChangeNotifierModel = _pixelsChangeNotifierModel;
-    }
+    _refreshScrollController = widget.scrollController;
+    if (widget.onHeaderRefresh != null) _refreshScrollController.headerStatusValueNotifier = _headerStatusValueNotifier;
+    if (widget.onFooterRefresh != null) _refreshScrollController.footerStatusValueNotifier = _footerStatusValueNotifier;
+    _refreshScrollController.pixelsChangeNotifierModel = _pixelsChangeNotifierModel;
     _refreshScrollController.configuration = widget.configuration ?? (context.dependOnInheritedWidgetOfExactType<RefreshConfiguration>() ?? RefreshConfiguration.defualt());
-    if (_refreshScrollController.hasClients) _refreshScrollController.position.configuration = _refreshScrollController.configuration;
   }
 
   void _footerStatusListener() {
@@ -71,15 +90,20 @@ class RefreshWidgetState extends State<RefreshWidget> {
       Future.delayed(Duration.zero, () async {
         if (await widget.onFooterRefresh()) {
           _footerStatusValueNotifier.value = RefreshStatus.success;
-          _footerNoMoreDataWait = Future.delayed(_refreshScrollController.configuration.headerSuccessDuration);
-          await _footerNoMoreDataWait;
+          if (_refreshScrollController.configuration.headerSuccessDuration != Duration.zero) {
+            _footerNoMoreDataWait = Future.delayed(_refreshScrollController.configuration.headerSuccessDuration);
+            await _footerNoMoreDataWait;
+            Future.delayed(Duration.zero, () => _footerNoMoreDataWait = null);
+          }
           _footerStatusValueNotifier.value = widget.footerNoMoreData ? RefreshStatus.nomoredata : RefreshStatus.done;
-          Future.delayed(Duration.zero, () => _footerNoMoreDataWait = null);
+          SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
+            if (_refreshScrollController.hasClients) _refreshScrollController.position.goIdle();
+          });
         } else {
           _footerStatusValueNotifier.value = RefreshStatus.faildone;
         }
         SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
-          _pixelsChangeNotifierModelListener();
+          _noScrollPixelsChange();
         });
       });
     }
@@ -91,16 +115,21 @@ class RefreshWidgetState extends State<RefreshWidget> {
       Future.delayed(Duration.zero, () async {
         if (await widget.onHeaderRefresh()) {
           _headerStatusValueNotifier.value = RefreshStatus.success;
-          await Future.delayed(_refreshScrollController.configuration.headerSuccessDuration);
+          if (_refreshScrollController.configuration.headerSuccessDuration != Duration.zero) await Future.delayed(_refreshScrollController.configuration.headerSuccessDuration);
           _headerStatusValueNotifier.value = RefreshStatus.done;
         } else {
           _headerStatusValueNotifier.value = RefreshStatus.faildone;
         }
+        SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
+          _noScrollPixelsChange();
+        });
       });
     }
-    SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
-      _pixelsChangeNotifierModelListener();
-    });
+  }
+
+  void _noScrollPixelsChange() {
+    _headerPixelsChangeNotifierModel.value = null;
+    _footerPixelsChangeNotifierModel.value = null;
   }
 
   void _pixelsChangeNotifierModelListener() {
@@ -138,10 +167,10 @@ class RefreshWidgetState extends State<RefreshWidget> {
     _headerStatusValueNotifier.addListener(_headerStatusListener);
     _footerStatusValueNotifier.addListener(_footerStatusListener);
     _pixelsChangeNotifierModel.addListener(_pixelsChangeNotifierModelListener);
-    if (widget.initialStartHeaderRefresh)
-      WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-        if (_refreshScrollController.hasClients) _refreshScrollController.position.startHeaderRefresh();
-      });
+    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      if (widget.initialStartHeaderRefresh && _refreshScrollController.hasClients) _refreshScrollController.position.startHeaderRefresh();
+      if (widget.footerNoMoreData) _footerStatusValueNotifier.value = RefreshStatus.nomoredata;
+    });
   }
 
   @override
@@ -151,10 +180,14 @@ class RefreshWidgetState extends State<RefreshWidget> {
         widget.child,
         widget.onHeaderRefresh != null
             ? RefreshIndicatorContainer(
+                onTap: () {
+                  if (widget.headerOnTap != null) widget.headerOnTap(_headerStatusValueNotifier.value);
+                },
                 sizeNotifier: _headerPixelsChangeNotifierModel,
                 statusNotifier: _headerStatusValueNotifier,
                 configuration: _refreshScrollController?.configuration,
                 mode: RefreshIndicatorContainerMode.header,
+                expand: widget.headerExpand ?? (_refreshScrollController.configuration.headerExpand ?? 0),
                 indicatorBuilder: (status, configuration, offset) {
                   if (widget.headerIndicatorBuilder != null) return widget.headerIndicatorBuilder(status, configuration, offset);
                   if (_refreshScrollController.configuration.headerIndicatorBuilder != null) return _refreshScrollController.configuration.headerIndicatorBuilder(status, configuration, offset);
@@ -164,10 +197,14 @@ class RefreshWidgetState extends State<RefreshWidget> {
             : Container(),
         widget.onFooterRefresh != null
             ? RefreshIndicatorContainer(
+                onTap: () {
+                  if (widget.footerOnTap != null) widget.footerOnTap(_footerStatusValueNotifier.value);
+                },
                 sizeNotifier: _footerPixelsChangeNotifierModel,
                 statusNotifier: _footerStatusValueNotifier,
                 configuration: _refreshScrollController?.configuration,
                 mode: RefreshIndicatorContainerMode.footer,
+                expand: widget.footerExpand ?? (_refreshScrollController.configuration.footerExpand ?? 0),
                 indicatorBuilder: (status, configuration, offset) {
                   if (widget.footerIndicatorBuilder != null) return widget.footerIndicatorBuilder(status, configuration, offset);
                   if (_refreshScrollController.configuration.footerIndicatorBuilder != null) return _refreshScrollController.configuration.footerIndicatorBuilder(status, configuration, offset);
@@ -181,15 +218,52 @@ class RefreshWidgetState extends State<RefreshWidget> {
 }
 
 class RefreshScrollController extends ScrollController {
-  RefreshScrollController({double initialScrollOffset = 0.0}) : super(initialScrollOffset: initialScrollOffset);
-  ValueNotifier<RefreshStatus> headerStatusValueNotifier;
-  ValueNotifier<RefreshStatus> footerStatusValueNotifier;
-  PixelsChangeNotifierModel pixelsChangeNotifierModel;
-  RefreshConfiguration configuration;
+  RefreshScrollController({
+    double initialScrollOffset = 0.0,
+    bool keepScrollOffset = true,
+    String debugLabel,
+  }) : super(initialScrollOffset: initialScrollOffset, keepScrollOffset: keepScrollOffset, debugLabel: debugLabel);
+  ValueNotifier<RefreshStatus> _headerStatusValueNotifier;
+  ValueNotifier<RefreshStatus> _footerStatusValueNotifier;
+  PixelsChangeNotifierModel _pixelsChangeNotifierModel;
+  RefreshConfiguration _configuration;
+  ValueNotifier<RefreshStatus> get headerStatusValueNotifier => _headerStatusValueNotifier;
+  ValueNotifier<RefreshStatus> get footerStatusValueNotifier => _footerStatusValueNotifier;
+  PixelsChangeNotifierModel get pixelsChangeNotifierModel => _pixelsChangeNotifierModel;
+  RefreshConfiguration get configuration => _configuration;
+  set headerStatusValueNotifier(ValueNotifier<RefreshStatus> value) {
+    _headerStatusValueNotifier = value;
+    if (this.hasClients) this.position.headerStatusValueNotifier = value;
+  }
+
+  set footerStatusValueNotifier(ValueNotifier<RefreshStatus> value) {
+    _footerStatusValueNotifier = value;
+    if (this.hasClients) this.position.footerStatusValueNotifier = value;
+  }
+
+  set pixelsChangeNotifierModel(PixelsChangeNotifierModel value) {
+    _pixelsChangeNotifierModel = value;
+    if (this.hasClients) this.position.pixelsChangeNotifierModel = value;
+  }
+
+  set configuration(RefreshConfiguration value) {
+    _configuration = value;
+    if (this.hasClients) this.position.configuration = value;
+  }
+
+  bool get headerRefreshing => headerStatusValueNotifier?.value == RefreshStatus.refresh;
+  bool get headerIsIdleing => headerStatusValueNotifier?.value == RefreshStatus.none || headerStatusValueNotifier?.value == RefreshStatus.done;
+  bool get footerRefreshing => footerStatusValueNotifier?.value == RefreshStatus.refresh;
+  bool get footerIsIdleing => footerStatusValueNotifier?.value == RefreshStatus.none || footerStatusValueNotifier?.value == RefreshStatus.done;
 
   void startHeaderRefresh() async {
-    await this.animateTo(-this.configuration.headerRuningHeight, duration: Duration(milliseconds: 333), curve: Curves.easeIn);
+    if (this.hasClients) await this.animateTo(-this.configuration.headerRuningHeight, duration: Duration(milliseconds: 222), curve: Curves.easeIn);
     headerStatusValueNotifier.value = RefreshStatus.refresh;
+  }
+
+  void startFooterRefresh() async {
+    if (this.hasClients) await this.animateTo(this.position.originalMaxScrollExtent + this.configuration.footerRuningHeight, duration: Duration(milliseconds: 222), curve: Curves.easeIn);
+    footerStatusValueNotifier.value = RefreshStatus.refresh;
   }
 
   @override
@@ -224,6 +298,8 @@ class RefreshScrollPositionWithSingleContext extends ScrollPositionWithSingleCon
   ValueNotifier<RefreshStatus> get headerStatusValueNotifier => _headerStatusValueNotifier;
   ValueNotifier<RefreshStatus> get footerStatusValueNotifier => _footerStatusValueNotifier;
 
+  void publichForcePixels(double value) => this.forcePixels(value);
+
   void startHeaderRefresh() async {
     await this.animateTo(-this.configuration.headerRuningHeight, duration: Duration(milliseconds: 222), curve: Curves.easeIn);
     headerStatusValueNotifier.value = RefreshStatus.refresh;
@@ -253,7 +329,7 @@ class RefreshScrollPositionWithSingleContext extends ScrollPositionWithSingleCon
   }
 
   void _footerStatusListener() {
-    if (footerStatusValueNotifier.value == RefreshStatus.success || footerStatusValueNotifier.value == RefreshStatus.faildone || footerStatusValueNotifier.value == RefreshStatus.nomoredata) {
+    if (footerStatusValueNotifier.value == RefreshStatus.faildone || footerStatusValueNotifier.value == RefreshStatus.nomoredata) {
       this.goBallistic(0);
     }
   }
@@ -317,13 +393,21 @@ class RefreshScrollPositionWithSingleContext extends ScrollPositionWithSingleCon
 
   @override
   void applyUserOffset(double delta) {
-    if (this.pixels <= -configuration.headerRuningHeight && headerStatusValueNotifier?.value == RefreshStatus.drag) headerStatusValueNotifier.value = RefreshStatus.armed;
-    if (this.pixels > -configuration.headerRuningHeight && headerStatusValueNotifier?.value == RefreshStatus.armed) headerStatusValueNotifier.value = RefreshStatus.drag;
-    if (this.pixels >= this.originalMaxScrollExtent + configuration.footerRuningHeight && footerStatusValueNotifier?.value == RefreshStatus.drag) footerStatusValueNotifier.value = RefreshStatus.armed;
-    if (this.pixels < this.originalMaxScrollExtent + configuration.footerRuningHeight && footerStatusValueNotifier?.value == RefreshStatus.armed) footerStatusValueNotifier.value = RefreshStatus.drag;
+    if (configuration == null) return;
+    if (this.pixels <= -configuration.headerRuningHeight && (headerStatusValueNotifier?.value == RefreshStatus.drag || headerStatusValueNotifier?.value == RefreshStatus.faildone)) headerStatusValueNotifier.value = RefreshStatus.armed;
+    if (this.pixels > -configuration.headerRuningHeight && (headerStatusValueNotifier?.value == RefreshStatus.armed || headerStatusValueNotifier?.value == RefreshStatus.faildone)) headerStatusValueNotifier.value = RefreshStatus.drag;
+    if (this.pixels >= this.originalMaxScrollExtent + configuration.footerRuningHeight && (footerStatusValueNotifier?.value == RefreshStatus.drag || footerStatusValueNotifier?.value == RefreshStatus.faildone)) footerStatusValueNotifier.value = RefreshStatus.armed;
+    if (this.pixels < this.originalMaxScrollExtent + configuration.footerRuningHeight && (footerStatusValueNotifier?.value == RefreshStatus.armed || footerStatusValueNotifier?.value == RefreshStatus.faildone)) footerStatusValueNotifier.value = RefreshStatus.drag;
     if (headerStatusValueNotifier?.value == RefreshStatus.none || headerStatusValueNotifier?.value == RefreshStatus.done) headerStatusValueNotifier.value = RefreshStatus.drag;
     if (footerStatusValueNotifier?.value == RefreshStatus.none || footerStatusValueNotifier?.value == RefreshStatus.done) footerStatusValueNotifier.value = RefreshStatus.drag;
     super.applyUserOffset(delta);
+  }
+
+  @override
+  void dispose() {
+    _footerStatusValueNotifier?.removeListener(_footerStatusListener);
+    _headerStatusValueNotifier?.removeListener(_headerStatusListener);
+    super.dispose();
   }
 
   @override
@@ -335,8 +419,8 @@ class RefreshScrollPositionWithSingleContext extends ScrollPositionWithSingleCon
 
   @override
   void goIdle() {
-    if (headerStatusValueNotifier?.value == RefreshStatus.done) headerStatusValueNotifier?.value = RefreshStatus.none;
-    if (footerStatusValueNotifier?.value == RefreshStatus.done) footerStatusValueNotifier?.value = RefreshStatus.none;
+    if (headerStatusValueNotifier?.value == RefreshStatus.done || headerStatusValueNotifier?.value == RefreshStatus.drag) headerStatusValueNotifier?.value = RefreshStatus.none;
+    if (footerStatusValueNotifier?.value == RefreshStatus.done || footerStatusValueNotifier?.value == RefreshStatus.drag) footerStatusValueNotifier?.value = RefreshStatus.none;
     super.goIdle();
   }
 }

@@ -5,6 +5,7 @@ import 'status.dart';
 class RefreshConfiguration extends InheritedWidget {
   RefreshConfiguration({
     this.headerIndicatorBuilder,
+    this.headerExpand = 0,
     this.headerMinHeight = 44,
     this.headerRuningHeight = 88,
     this.noMoreDataHeight = 88,
@@ -12,6 +13,7 @@ class RefreshConfiguration extends InheritedWidget {
     this.headerSuccessHeight = 0,
     this.headerSuccessDuration = Duration.zero,
     this.footerIndicatorBuilder,
+    this.footerExpand = 0,
     this.footerMinHeight = 44,
     this.footerRuningHeight = 88,
     this.footerFailHeight = 0,
@@ -25,6 +27,9 @@ class RefreshConfiguration extends InheritedWidget {
 
   /// header容器的最小高度，最小高度是为了下拉的时候，能够看得出来控件是从上面拉下来的，而不是从小变大，如果要从小变大的效果可以将此高度设置为0
   final double headerMinHeight;
+
+  /// header距离顶部距离
+  final double headerExpand;
 
   /// 下拉运行的高度，当拉到这个高度时松开即可刷新
   final double headerRuningHeight;
@@ -40,6 +45,9 @@ class RefreshConfiguration extends InheritedWidget {
 
   /// 下拉加载默认的builder
   final Widget Function(RefreshStatus status, RefreshConfiguration configuration, double offset) footerIndicatorBuilder;
+
+  /// footer距离顶部距离
+  final double footerExpand;
 
   /// 上拉最小高度
   final double footerMinHeight;
@@ -70,7 +78,9 @@ class RefreshConfiguration extends InheritedWidget {
       footerRuningHeight: 88,
       footerMinHeight: 44,
       noMoreDataHeight: 88,
+      headerExpand: 0,
       footerSuccessHeight: 88,
+      footerExpand: 0,
       footerSuccessDuration: Duration(seconds: 1),
     );
   }
